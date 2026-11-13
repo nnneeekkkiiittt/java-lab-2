@@ -26,7 +26,7 @@ public class Condition {
         return row -> {
             Object actual = row.get(pos);
             if (actual == null || literal == null) return false;  // как в SQL: сравнение с NULL ложно
-            return op.test(compare(actual, literal));
+            return op.compare(actual, literal);
         };
     }
 

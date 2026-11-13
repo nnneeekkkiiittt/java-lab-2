@@ -21,5 +21,39 @@ public enum Operator {
         return null;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public boolean compare(Object actual, Object literal) {
+        if (actual == null || literal == null) return false;
 
+        boolean numbers = actual instanceof Number && literal instanceof Number;
+
+        switch (this) {
+            case EQUAL:
+                if (numbers) return ((Number) actual).doubleValue() == ((Number) literal).doubleValue();
+                return actual.equals(literal);
+
+            case NOT_EQUAL:
+                if (numbers) return ((Number) actual).doubleValue() != ((Number) literal).doubleValue();
+                return !actual.equals(literal);
+
+            case LESS_THAN:
+                if (numbers) return ((Number) actual).doubleValue() < ((Number) literal).doubleValue();
+                return ((Comparable) actual).compareTo(literal) < 0;
+
+            case GREATER_THAN:
+                if (numbers) return ((Number) actual).doubleValue() > ((Number) literal).doubleValue();
+                return ((Comparable) actual).compareTo(literal) > 0;
+
+            case LESS_OR_EQUAL:
+                if (numbers) return ((Number) actual).doubleValue() <= ((Number) literal).doubleValue();
+                return ((Comparable) actual).compareTo(literal) <= 0;
+
+            case GREATER_OR_EQUAL:
+                if (numbers) return ((Number) actual).doubleValue() >= ((Number) literal).doubleValue();
+                return ((Comparable) actual).compareTo(literal) >= 0;
+
+            default:
+                return false;
+        }
+    }
 }
