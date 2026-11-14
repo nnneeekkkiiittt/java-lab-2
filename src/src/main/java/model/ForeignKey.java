@@ -1,6 +1,10 @@
 package model;
 
-public final class ForeignKey {
+import java.io.Serializable;
+
+public final class ForeignKey implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final String refTable;
     private final String refColumn;
 

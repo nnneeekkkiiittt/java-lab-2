@@ -9,12 +9,30 @@ import model.DataType;
 import model.ForeignKey;
 import model.Row;
 import model.Schema;
+import repository.NoOpTableRepository;
+import repository.TableData;
+import repository.TableRepository;
 
 import java.util.*;
 import java.util.function.Predicate;
 
 public class DatabaseImpl implements Database {
     private final Map<String, Table> tables = new LinkedHashMap<>();
+    private final TableRepository repository;
+
+    /** База без диска: удобно для тестов и бенчмарков. */
+    public DatabaseImpl() {
+        this(new NoOpTableRepository());
+    }
+
+    /** При создании загружает все таблицы из репозитория. */
+    public DatabaseImpl(TableRepository repository) {
+        this.repository = repository;
+        for (TableData data : repository.loadAll()) {
+            tables.put(data.getSchema().getTableName(),
+                    new Table(data.getSchema(), data.getRows()));
+        }
+    }
 
     // ---------------- каталог ----------------
 
@@ -30,8 +48,9 @@ public class DatabaseImpl implements Database {
                 throw new SchemaException("Unknown referenced table: " + fk.getRefTable());
             }
         }
-        tables.put(name, new Table(schema));
-        // TODO: repository.save(...)
+        Table table = new Table(schema);
+        tables.put(name, table);
+        persist(table);
     }
 
     @Override
@@ -50,7 +69,7 @@ public class DatabaseImpl implements Database {
             }
         }
         tables.remove(targetName);
-        // TODO: repository.delete(targetName)
+        repository.drop(targetName);
     }
 
     @Override
@@ -91,7 +110,7 @@ public class DatabaseImpl implements Database {
         for (Object[] values : prepared) {
             table.insert(values);
         }
-        // TODO: repository.save(table), один раз на запрос
+        persist(table);   // один раз на запрос
         return prepared.size();
     }
 
@@ -147,7 +166,7 @@ public class DatabaseImpl implements Database {
         }
 
         int updated = table.update(filter(schema, where), byPosition);
-        // TODO: repository.save(table)
+        if (updated > 0) persist(table);
         return updated;
     }
 
@@ -166,11 +185,16 @@ public class DatabaseImpl implements Database {
             }
         }
 
-        // TODO: repository.save(table)
-        return table.delete(filter);
+        int deleted = table.delete(filter);
+        if (deleted > 0) persist(table);
+        return deleted;
     }
 
     // ---------------- внутреннее ----------------
+
+    private void persist(Table table) {
+        repository.save(new TableData(table.getSchema(), table.getRows()));
+    }
 
     private Table table(String name) {
         Table t = tables.get(name.toLowerCase());

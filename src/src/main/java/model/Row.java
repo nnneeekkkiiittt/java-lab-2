@@ -1,8 +1,11 @@
 package model;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
-public final class Row {
+public final class Row implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final Object[] values;
 
     public Row(Object[] values) { this.values = values.clone(); }

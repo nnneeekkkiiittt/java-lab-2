@@ -1,6 +1,10 @@
 package model;
 
-public final class Column {
+import java.io.Serializable;
+
+public final class Column implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final String name;
     private final DataType type;
     private final boolean isPrimaryKey;

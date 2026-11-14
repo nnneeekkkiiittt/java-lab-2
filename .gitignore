@@ -1,0 +1,15 @@
+# Maven
+target/
+src/target/
+
+# данные базы
+data/
+src/data/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store

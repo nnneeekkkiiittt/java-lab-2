@@ -1,10 +1,13 @@
 package model;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class Schema {
+public final class Schema implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final String tableName;
     private final List<Column> columns;
     private final Map<String, Integer> positions = new HashMap<>();
