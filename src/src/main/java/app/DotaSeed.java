@@ -49,5 +49,7 @@ public final class DotaSeed {
                 Arrays.asList(2L, "Black King Bar", 4L, 3975L, "Grants spell immunity"),
                 Arrays.asList(3L, "Force Staff", 3L, 2200L, "Pushes a unit forward"),
                 Arrays.asList(4L, "Town Portal Scroll", null, 50L, "Not owned by any hero")));
+
+        db.createIndex("idx_items_owner", "items", "owner_id");
     }
 }

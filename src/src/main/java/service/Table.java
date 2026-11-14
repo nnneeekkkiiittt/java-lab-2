@@ -1,7 +1,10 @@
 package service;
 
 import exception.DuplicateKeyException;
+import exception.SchemaException;
 import model.DataType;
+import model.Index;
+import model.Operator;
 import model.Row;
 import model.Schema;
 
@@ -12,6 +15,7 @@ public class Table {
     private final Schema schema;
     private final Map<Long, Row> rows = new LinkedHashMap<>();   // rowId -> строка
     private final Map<Object, Long> pkIndex = new HashMap<>();   // значение PK -> rowId
+    private final Map<String, Index> indexes = new LinkedHashMap<>();   // имя колонки -> индекс
     private long nextRowId = 1;
 
     public Table(Schema schema) {
@@ -25,11 +29,74 @@ public class Table {
         }
     }
 
+    /**
+     * Загрузка с диска: строки и сохранённые индексы. Индекс, который не совпадает с данными
+     * (или относится к несуществующей колонке), перестраивается из строк.
+     */
+    public Table(Schema schema, Collection<Row> initial, Collection<Index> savedIndexes) {
+        this(schema, initial);   // индексы ещё не подключены, строки добавляются без них
+        for (Index saved : savedIndexes) {
+            if (!schema.hasColumn(saved.getColumn())) continue;
+            if (isConsistent(saved)) {
+                indexes.put(saved.getColumn(), saved);
+            } else {
+                createIndex(saved.getName(), saved.getColumn());
+            }
+        }
+    }
+
     public Schema getSchema() { return schema; }
     public int size()         { return rows.size(); }
 
     public Collection<Row> getRows() {
         return Collections.unmodifiableCollection(rows.values());
+    }
+
+    // ---------------- индексы ----------------
+
+    public boolean hasIndex(String column) {
+        return indexes.containsKey(column.toLowerCase());
+    }
+
+    public Index getIndex(String column) {
+        return indexes.get(column.toLowerCase());
+    }
+
+    public Collection<Index> getIndexes() {
+        return Collections.unmodifiableCollection(indexes.values());
+    }
+
+    /** Создаёт индекс и заполняет его существующими строками. */
+    public void createIndex(String name, String column) {
+        int pos = schema.indexOf(column);
+        if (pos == -1) throw new SchemaException("Unknown column: " + column);
+
+        Index index = new Index(name, schema.getColumns().get(pos).getName());
+        int pkPos = schema.getPkPosition();
+        for (Row row : rows.values()) {
+            index.add(row.get(pos), row.get(pkPos));
+        }
+        indexes.put(index.getColumn(), index);
+    }
+
+    /** Строки по индексу. Литерал уже приведён к типу колонки. Порядок: по возрастанию значения. */
+    public List<Row> selectByIndex(Index index, Operator op, Object literal) {
+        List<Row> result = new ArrayList<>();
+        for (Object pk : index.find(op, literal)) {
+            Row row = findByPk(pk);
+            if (row != null) result.add(row);
+        }
+        return result;
+    }
+
+    /** Число записей индекса должно равняться числу строк с непустым значением в колонке. */
+    private boolean isConsistent(Index index) {
+        int pos = schema.indexOf(index.getColumn());
+        int expected = 0;
+        for (Row row : rows.values()) {
+            if (row.get(pos) != null) expected++;
+        }
+        return expected == index.entryCount();
     }
 
     // ---------------- INSERT ----------------
@@ -113,6 +180,7 @@ public class Table {
                 pkIndex.remove(old.get(pkPos));
                 pkIndex.put(fresh.get(pkPos), e.getKey());
             }
+            reindex(old, fresh);
             rows.put(e.getKey(), fresh);
         }
         return updated.size();
@@ -125,7 +193,11 @@ public class Table {
         List<Long> ids = matchingIds(filter);
         for (Long id : ids) {
             Row removed = rows.remove(id);
-            pkIndex.remove(removed.get(schema.getPkPosition()));
+            Object pk = removed.get(schema.getPkPosition());
+            pkIndex.remove(pk);
+            for (Index index : indexes.values()) {
+                index.remove(removed.get(schema.indexOf(index.getColumn())), pk);
+            }
         }
         return ids.size();
     }
@@ -134,8 +206,29 @@ public class Table {
 
     private void put(Row row) {
         long id = nextRowId++;
+        Object pk = row.get(schema.getPkPosition());
         rows.put(id, row);
-        pkIndex.put(row.get(schema.getPkPosition()), id);
+        pkIndex.put(pk, id);
+        for (Index index : indexes.values()) {
+            index.add(row.get(schema.indexOf(index.getColumn())), pk);
+        }
+    }
+
+    /** Переносит запись всех индексов со старой версии строки на новую. */
+    private void reindex(Row old, Row fresh) {
+        int pkPos = schema.getPkPosition();
+        Object oldPk = old.get(pkPos);
+        Object newPk = fresh.get(pkPos);
+        for (Index index : indexes.values()) {
+            int pos = schema.indexOf(index.getColumn());
+            Object oldValue = old.get(pos);
+            Object newValue = fresh.get(pos);
+            // ключ в индексе меняется, если изменилось значение колонки или первичный ключ строки
+            if (!Objects.equals(oldValue, newValue) || !Objects.equals(oldPk, newPk)) {
+                index.remove(oldValue, oldPk);
+                index.add(newValue, newPk);
+            }
+        }
     }
 
     private List<Long> matchingIds(Predicate<Row> filter) {

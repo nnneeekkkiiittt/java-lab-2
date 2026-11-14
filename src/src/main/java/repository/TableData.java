@@ -1,5 +1,6 @@
 package repository;
 
+import model.Index;
 import model.Row;
 import model.Schema;
 
@@ -14,12 +15,18 @@ public final class TableData implements Serializable {
 
     private final Schema schema;
     private final ArrayList<Row> rows;
+    private final ArrayList<Index> indexes;
 
-    public TableData(Schema schema, Collection<Row> rows) {
+    public TableData(Schema schema, Collection<Row> rows, Collection<Index> indexes) {
         this.schema = schema;
         this.rows = new ArrayList<>(rows);   // копия: сериализуется только ArrayList
+        this.indexes = new ArrayList<>(indexes); // аналогично
     }
 
     public Schema getSchema()        { return schema; }
     public Collection<Row> getRows() { return rows; }
+
+    public ArrayList<Index> getIndexes() {
+        return indexes;
+    }
 }

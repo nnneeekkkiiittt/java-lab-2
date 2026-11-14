@@ -14,5 +14,6 @@ public interface Database {
     Query select(String table, List<String> columns, Condition where);
     int update(String table, Map<String, Object> assignments, Condition where);
     int delete(String table, Condition where);
+    void createIndex(String indexName, String table, String column);
     Collection<Table> getTables();
 }

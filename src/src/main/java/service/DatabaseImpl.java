@@ -3,10 +3,13 @@ package service;
 import exception.DuplicateKeyException;
 import exception.ForeignKeyException;
 import exception.SchemaException;
+import exception.TypeMismatchException;
 import model.Column;
 import model.Condition;
 import model.DataType;
 import model.ForeignKey;
+import model.Index;
+import model.Operator;
 import model.Row;
 import model.Schema;
 import repository.NoOpTableRepository;
@@ -30,7 +33,7 @@ public class DatabaseImpl implements Database {
         this.repository = repository;
         for (TableData data : repository.loadAll()) {
             tables.put(data.getSchema().getTableName(),
-                    new Table(data.getSchema(), data.getRows()));
+                    new Table(data.getSchema(), data.getRows(), data.getIndexes()));
         }
     }
 
@@ -70,6 +73,26 @@ public class DatabaseImpl implements Database {
         }
         tables.remove(targetName);
         repository.drop(targetName);
+    }
+
+    @Override
+    public void createIndex(String indexName, String tableName, String column) {
+        Table table = table(tableName);
+        position(table.getSchema(), column);   // колонка существует
+
+        String name = indexName.toLowerCase();
+        for (Table t : tables.values()) {
+            for (Index i : t.getIndexes()) {
+                if (i.getName().equals(name)) {
+                    throw new SchemaException("Index already exists: " + indexName);
+                }
+            }
+        }
+        if (table.hasIndex(column)) {
+            throw new SchemaException("Column " + column + " is already indexed");
+        }
+        table.createIndex(name, column);
+        persist(table);
     }
 
     @Override
@@ -128,7 +151,7 @@ public class DatabaseImpl implements Database {
         }
 
         List<Object[]> result = new ArrayList<>();
-        for (Row row : table.select(filter(schema, where))) {
+        for (Row row : findRows(table, where)) {
             Object[] projected = new Object[positions.length];
             for (int i = 0; i < positions.length; i++) {
                 projected[i] = row.get(positions[i]);
@@ -193,7 +216,7 @@ public class DatabaseImpl implements Database {
     // ---------------- внутреннее ----------------
 
     private void persist(Table table) {
-        repository.save(new TableData(table.getSchema(), table.getRows()));
+        repository.save(new TableData(table.getSchema(), table.getRows(), table.getIndexes()));
     }
 
     private Table table(String name) {
@@ -224,6 +247,45 @@ public class DatabaseImpl implements Database {
         return result;
     }
 
+    /**
+     * Планировщик SELECT: по первичному ключу или по индексу, если условие подходит,
+     * иначе полный перебор. Результат во всех случаях один и тот же, меняется только скорость
+     * (и порядок строк: через индекс они идут по возрастанию значения, а не в порядке вставки).
+     */
+    private List<Row> findRows(Table table, Condition where) {
+        Schema schema = table.getSchema();
+        if (where == null) return table.select(row -> true);
+
+        int pos = position(schema, where.getColumn());
+        Column column = schema.getColumns().get(pos);
+        Operator op = where.getOperator();
+        Object literal = where.getValue();
+
+        if (literal != null && op != Operator.NOT_EQUAL) {
+            Object key = tryCast(column.getType(), literal);
+            if (key != null) {
+                if (pos == schema.getPkPosition() && op == Operator.EQUAL) {
+                    Row row = table.findByPk(key);
+                    return row == null ? List.of() : List.of(row);
+                }
+                Index index = table.getIndex(column.getName());
+                if (index != null) {
+                    return table.selectByIndex(index, op, key);
+                }
+            }
+        }
+        return table.select(where.bind(schema));   // полный перебор
+    }
+
+    /** Приводит литерал к типу колонки; null, если не получилось (тогда идём полным перебором). */
+    private Object tryCast(DataType type, Object literal) {
+        try {
+            return type.cast(literal);
+        } catch (TypeMismatchException e) {
+            return null;
+        }
+    }
+
     private Predicate<Row> filter(Schema schema, Condition where) {
         if (where == null) return row -> true;
         position(schema, where.getColumn());   // чтобы не упасть на get(-1) внутри bind
@@ -243,13 +305,21 @@ public class DatabaseImpl implements Database {
 
     /** Есть ли в других таблицах строки, ссылающиеся на этот ключ родителя. */
     private boolean isReferenced(String parentName, Object pk) {
+        DataType parentKeyType = table(parentName).getSchema().getPrimaryKey().getType();
         for (Table other : tables.values()) {
             Schema s = other.getSchema();
             for (int i = 0; i < s.size(); i++) {
-                ForeignKey fk = s.getColumns().get(i).getForeignKey();
+                Column column = s.getColumns().get(i);
+                ForeignKey fk = column.getForeignKey();
                 if (fk == null || !fk.getRefTable().equals(parentName)) continue;
-                final int pos = i;
-                if (!other.select(row -> pk.equals(row.get(pos))).isEmpty()) return true;
+
+                Index index = other.getIndex(column.getName());
+                if (index != null && column.getType() == parentKeyType) {
+                    if (!index.find(Operator.EQUAL, pk).isEmpty()) return true;   // по индексу
+                } else {
+                    final int pos = i;
+                    if (!other.select(row -> pk.equals(row.get(pos))).isEmpty()) return true;
+                }
             }
         }
         return false;
