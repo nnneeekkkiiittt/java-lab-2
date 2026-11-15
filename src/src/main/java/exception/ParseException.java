@@ -1,0 +1,8 @@
+package exception;
+
+/** Ошибка разбора SQL-запроса: неизвестная команда, пропущенный токен, незакрытая строка и т.п. */
+public class ParseException extends DotaDBException {
+    public ParseException(String message) {
+        super(message);
+    }
+}

@@ -1,6 +1,6 @@
 package app;
 
-import exception.DotaDBException;
+import parser.QueryProcessor;
 import repository.FileTableRepository;
 import service.ConsoleInterface;
 import service.Database;
@@ -15,9 +15,7 @@ public class Main {
             DotaSeed.fill(db);
         }
 
-        // TODO: заменить на парсер: sql -> QueryProcessor.execute(sql)
-        new ConsoleInterface(sql -> {
-            throw new DotaDBException("SQL parser is not connected yet");
-        }).run();
+        QueryProcessor processor = new QueryProcessor(db);
+        new ConsoleInterface(processor::execute).run();
     }
 }

@@ -23,12 +23,10 @@ public class DatabaseImpl implements Database {
     private final Map<String, Table> tables = new LinkedHashMap<>();
     private final TableRepository repository;
 
-    /** База без диска: удобно для тестов и бенчмарков. */
     public DatabaseImpl() {
         this(new NoOpTableRepository());
     }
 
-    /** При создании загружает все таблицы из репозитория. */
     public DatabaseImpl(TableRepository repository) {
         this.repository = repository;
         for (TableData data : repository.loadAll()) {
@@ -47,8 +45,16 @@ public class DatabaseImpl implements Database {
         }
         for (Column c : schema.getColumns()) {
             ForeignKey fk = c.getForeignKey();
-            if (fk != null && !tables.containsKey(fk.getRefTable())) {
+            if (fk == null) continue;
+            Table parent = tables.get(fk.getRefTable());
+            if (parent == null) {
                 throw new SchemaException("Unknown referenced table: " + fk.getRefTable());
+            }
+            // внешний ключ может ссылаться только на первичный ключ родителя, и типы должны совпадать
+            Column parentKey = parent.getSchema().getPrimaryKey();
+            if (!parentKey.getName().equals(fk.getRefColumn()) || parentKey.getType() != c.getType()) {
+                throw new SchemaException("Column " + c.getName() + " must reference the primary key "
+                        + fk.getRefTable() + "." + parentKey.getName() + " (" + parentKey.getType() + ")");
             }
         }
         Table table = new Table(schema);
@@ -109,11 +115,13 @@ public class DatabaseImpl implements Database {
         int[] targets = positions(schema, columns);
         int pkPos = schema.getPkPosition();
 
-        // Сначала готовим и проверяем ВСЕ записи, потом вставляем: пакет вставляется целиком или никак.
         List<Object[]> prepared = new ArrayList<>();
         Set<Object> batchPks = new HashSet<>();
 
         for (List<Object> given : valueRows) {
+            if (given.size() != targets.length) {
+                throw new SchemaException("Expected " + targets.length + " values but got " + given.size());
+            }
             Object[] values = new Object[schema.size()];   // непереданные колонки остаются null
             for (int i = 0; i < targets.length; i++) {
                 int pos = targets[i];
@@ -181,7 +189,6 @@ public class DatabaseImpl implements Database {
             }
         }
 
-        // Упрощение: менять PK таблицы, на которую кто-то ссылается, нельзя.
         if (byPosition.containsKey(schema.getPkPosition())
                 && hasReferencingTables(schema.getTableName())) {
             throw new ForeignKeyException("Cannot change primary key of referenced table "
@@ -231,7 +238,6 @@ public class DatabaseImpl implements Database {
         return pos;
     }
 
-    /** Позиции колонок из запроса. null, пусто или "*" означает все колонки по порядку. */
     private int[] positions(Schema schema, List<String> columns) {
         boolean all = columns == null || columns.isEmpty()
                 || (columns.size() == 1 && columns.getFirst().equals("*"));
@@ -247,11 +253,6 @@ public class DatabaseImpl implements Database {
         return result;
     }
 
-    /**
-     * Планировщик SELECT: по первичному ключу или по индексу, если условие подходит,
-     * иначе полный перебор. Результат во всех случаях один и тот же, меняется только скорость
-     * (и порядок строк: через индекс они идут по возрастанию значения, а не в порядке вставки).
-     */
     private List<Row> findRows(Table table, Condition where) {
         Schema schema = table.getSchema();
         if (where == null) return table.select(row -> true);
@@ -277,7 +278,6 @@ public class DatabaseImpl implements Database {
         return table.select(where.bind(schema));   // полный перебор
     }
 
-    /** Приводит литерал к типу колонки; null, если не получилось (тогда идём полным перебором). */
     private Object tryCast(DataType type, Object literal) {
         try {
             return type.cast(literal);
@@ -292,7 +292,6 @@ public class DatabaseImpl implements Database {
         return where.bind(schema);
     }
 
-    /** Для каждого внешнего ключа строки: значение (если не null) должно существовать в родителе. */
     private void checkForeignKeys(Schema schema, Object[] values) {
         for (int i = 0; i < schema.size(); i++) {
             ForeignKey fk = schema.getColumns().get(i).getForeignKey();
@@ -303,7 +302,6 @@ public class DatabaseImpl implements Database {
         }
     }
 
-    /** Есть ли в других таблицах строки, ссылающиеся на этот ключ родителя. */
     private boolean isReferenced(String parentName, Object pk) {
         DataType parentKeyType = table(parentName).getSchema().getPrimaryKey().getType();
         for (Table other : tables.values()) {

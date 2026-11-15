@@ -24,16 +24,15 @@ public class ConsoleInterface {
                     break;
                 }
                 String line = scanner.nextLine();
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
                 if ("exit".equalsIgnoreCase(line.trim())) {
                     break;
                 }
                 try {
                     Query result = executor.apply(line);
-                    if (result != null && result.hasRows() && result.getRows() != null && !result.getRows().isEmpty()) {
-                        TablePrinter.print(result);
-                    } else {
-                        System.out.println("Запрос выполнен успешно");
-                    }
+                    print(result);
                 } catch (DotaDBException e) {
                     System.out.println("Ошибка: " + e.getMessage());
                 } catch (RuntimeException e) {
@@ -42,6 +41,19 @@ public class ConsoleInterface {
             }
         } finally {
             scanner.close();
+        }
+    }
+
+    private static void print(Query result) {
+        if (result == null) {
+            System.out.println("Запрос выполнен");
+        } else if (result.hasRows()) {
+            TablePrinter.print(result);
+            System.out.println("Строк: " + result.getRows().size());
+        } else if (result.getMessage() != null) {
+            System.out.println(result.getMessage());
+        } else {
+            System.out.println("Затронуто строк: " + result.getAffected());
         }
     }
 }
