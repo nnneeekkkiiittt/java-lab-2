@@ -1,7 +1,7 @@
 package exception;
 
 /** Сообщает о нарушении ограничения внешнего ключа. */
-public class ForeignKeyException extends DotaDBException {
+public class ForeignKeyException extends DatabaseException {
     /** Создаёт исключение: Нарушение ограничения внешнего ключа.
      * @param message подробное описание причины ошибки.
      */

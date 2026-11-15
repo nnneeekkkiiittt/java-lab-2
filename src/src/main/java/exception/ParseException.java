@@ -1,7 +1,7 @@
 package exception;
 
 /** Ошибка разбора SQL-запроса: неизвестная команда, пропущенный токен, незакрытая строка и т.п. */
-public class ParseException extends DotaDBException {
+public class ParseException extends DatabaseException {
     /** Создаёт исключение: Ошибка разбора SQL-подобного запроса.
      * @param message подробное описание причины ошибки.
      */

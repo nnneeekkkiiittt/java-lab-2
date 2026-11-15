@@ -19,6 +19,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 
+/**
+ * Сравнение {@code SELECT} без индекса и с индексом на базе в памяти (без диска).
+ * Результат печатается в консоль и сохраняется в Markdown-файл.
+ */
 public final class IndexBenchmark {
     private static final int[] SIZES = {10_000, 100_000, 1_000_000};
     private static final int QUERIES = 30;
@@ -30,6 +34,12 @@ public final class IndexBenchmark {
     private IndexBenchmark() {
     }
 
+    /**
+     * Запускает замеры и записывает отчёт.
+     *
+     * @param args необязательный путь к файлу отчёта (по умолчанию {@code benchmark-results.md})
+     * @throws IOException если отчёт не удалось записать
+     */
     public static void main(String[] args) throws IOException {
         Path output = Path.of(args.length > 0 ? args[0] : "benchmark-results.md");
         StringBuilder md = new StringBuilder();

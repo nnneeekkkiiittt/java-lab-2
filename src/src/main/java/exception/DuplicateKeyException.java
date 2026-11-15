@@ -1,7 +1,7 @@
 package exception;
 
 /** Сообщает о нарушении уникальности первичного ключа. */
-public class DuplicateKeyException extends DotaDBException {
+public class DuplicateKeyException extends DatabaseException {
     /** Создаёт исключение: Нарушение уникальности первичного ключа.
      * @param message подробное описание причины ошибки.
      */

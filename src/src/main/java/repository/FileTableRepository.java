@@ -1,6 +1,6 @@
 package repository;
 
-import exception.DotaDBException;
+import exception.DatabaseException;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -32,7 +32,7 @@ public class FileTableRepository implements TableRepository {
         try {
             Files.createDirectories(dir);
         } catch (IOException e) {
-            throw new DotaDBException("Cannot create data directory: " + dir, e);
+            throw new DatabaseException("Cannot create data directory: " + dir, e);
         }
     }
 
@@ -50,7 +50,7 @@ public class FileTableRepository implements TableRepository {
                 }
             }
         } catch (IOException e) {
-            throw new DotaDBException("Cannot read data directory: " + dir, e);
+            throw new DatabaseException("Cannot read data directory: " + dir, e);
         }
         return result;
     }
@@ -74,7 +74,7 @@ public class FileTableRepository implements TableRepository {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
-            throw new DotaDBException("Cannot save table " + tableName, e);
+            throw new DatabaseException("Cannot save table " + tableName, e);
         }
     }
 
@@ -83,7 +83,7 @@ public class FileTableRepository implements TableRepository {
         try {
             Files.deleteIfExists(file(tableName));
         } catch (IOException e) {
-            throw new DotaDBException("Cannot delete table file " + tableName, e);
+            throw new DatabaseException("Cannot delete table file " + tableName, e);
         }
     }
 
@@ -93,12 +93,12 @@ public class FileTableRepository implements TableRepository {
                 new BufferedInputStream(Files.newInputStream(file)))) {
             Object object = in.readObject();
             if (!(object instanceof TableData)) {
-                throw new DotaDBException("Not a table file: " + fileName);
+                throw new DatabaseException("Not a table file: " + fileName);
             }
             return (TableData) object;
         } catch (IOException | ClassNotFoundException e) {
             // EOFException = обрезанный файл, InvalidClassException = формат классов изменился
-            throw new DotaDBException("Cannot read " + fileName + ": " + e, e);
+            throw new DatabaseException("Cannot read " + fileName + ": " + e, e);
         }
     }
 

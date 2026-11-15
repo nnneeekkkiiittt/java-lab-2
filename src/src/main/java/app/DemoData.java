@@ -7,13 +7,13 @@ import service.Database;
 import java.util.Arrays;
 import java.util.List;
 
-/** Начальные данные предметной области (Dota 2). Выполняется только если база пуста. */
-public final class DotaSeed {
+/** Демонстрационные данные: две связанные таблицы {@code heroes} и {@code items}. Заполняются только в пустой базе. Движок от предметной области не зависит, это лишь пример. */
+public final class DemoData {
 
-    private DotaSeed() {
+    private DemoData() {
     }
 
-    /** Создаёт демонстрационные таблицы и добавляет игровые данные.
+    /** Создаёт демонстрационные таблицы и добавляет в них записи.
      * @param db база данных для заполнения.
      */
     public static void fill(Database db) {
