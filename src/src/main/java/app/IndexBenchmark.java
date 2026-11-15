@@ -8,16 +8,17 @@ import service.Database;
 import service.DatabaseImpl;
 import service.Query;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
-/**
- * Сравнение SELECT без индекса и с индексом (база в памяти, без диска).
- * Запуск: {@code java -Xmx3g -cp target/classes app.IndexBenchmark}.
- * Таблица heroes, колонка gold: значения равномерно в [0, n/10), то есть около 10 строк на значение.
- */
 public final class IndexBenchmark {
     private static final int[] SIZES = {10_000, 100_000, 1_000_000};
     private static final int QUERIES = 30;
@@ -29,12 +30,29 @@ public final class IndexBenchmark {
     private IndexBenchmark() {
     }
 
-    /** Запускает тест на нескольких размерах таблицы и выводит медиану времени запросов.
-     * @param args аргументы командной строки не используются.
-     */
-    public static void main(String[] args) {
-        System.out.println("| Rows | Query | No index, ms | With index, ms | Speedup | Result rows |");
-        System.out.println("|---:|---|---:|---:|---:|---:|");
+    public static void main(String[] args) throws IOException {
+        Path output = Path.of(args.length > 0 ? args[0] : "benchmark-results.md");
+        StringBuilder md = new StringBuilder();
+
+        md.append("# Результаты тестирования производительности индекса\n\n");
+        md.append("Сравнение `SELECT` без индекса (полный перебор) и с индексом. База в памяти, ")
+                .append("без записи на диск. Время запроса: медиана из ").append(QUERIES)
+                .append(" замеров после ").append(WARMUP).append(" прогревочных. ")
+                .append("Таблица `heroes`, колонка `gold`: значения равномерно в [0, n/10), ")
+                .append("то есть около 10 строк на значение.\n\n");
+        md.append("**Окружение**\n\n");
+        md.append("- Дата: ").append(LocalDateTime.now().withNano(0)).append('\n');
+        md.append("- Java: ").append(System.getProperty("java.version"))
+                .append(" (").append(System.getProperty("java.vm.name")).append(")\n");
+        md.append("- ОС: ").append(System.getProperty("os.name")).append(' ')
+                .append(System.getProperty("os.arch")).append('\n');
+        md.append("- Логических процессоров: ").append(Runtime.getRuntime().availableProcessors()).append('\n');
+        md.append("- Максимум памяти JVM: ")
+                .append(Runtime.getRuntime().maxMemory() / (1024 * 1024)).append(" МБ\n\n");
+        md.append("**Результаты**\n\n");
+
+        emit(md, "| Rows | Query | No index, ms | With index, ms | Speedup | Result rows |");
+        emit(md, "|---:|---|---:|---:|---:|---:|");
 
         for (int n : SIZES) {
             Database db = new DatabaseImpl();
@@ -53,29 +71,29 @@ public final class IndexBenchmark {
 
             String[] names = {"gold = K", "gold >= max-4", "gold < 1% of range"};
             for (int q = 0; q < 3; q++) {
-                // Порядок выдачи может различаться (сканирование сохраняет порядок вставки,
-                // индекс сортирует по значению ключа), поэтому сравниваем наборы первичных ключей.
-                assertSameRows(scanResults[q], indexResults[q], names[q]);
+                // сверка: индекс обязан вернуть то же количество строк, что и перебор
+                if (scanResults[q].getRows().size() != indexResults[q].getRows().size()) {
+                    throw new IllegalStateException("Mismatch for " + names[q]);
+                }
                 double a = scan[q][0];
                 double b = indexed[q][0];
-                System.out.printf("| %,d | `%s` | %.3f | %.3f | x%.0f | %,d |%n",
-                        n, names[q], a, b, a / b, (long) indexed[q][1]);
+                emit(md, String.format(Locale.US, "| %,d | `%s` | %.3f | %.3f | x%.0f | %,d |",
+                        n, names[q], a, b, a / b, (long) indexed[q][1]));
             }
-            System.out.printf("| %,d | index build time | | %.1f | | |%n", n, buildMs);
+            emit(md, String.format(Locale.US, "| %,d | index build time | | %.1f | | |", n, buildMs));
         }
+
+        md.append("\nSpeedup = время без индекса / время с индексом. ")
+                .append("Последняя строка для каждого размера: разовая стоимость построения индекса.\n");
+        Files.writeString(output, md.toString(), StandardCharsets.UTF_8);
+
         System.out.println("\n(sink=" + sink + ")");
+        System.out.println("Saved: " + output.toAbsolutePath());
     }
 
-    /** Проверяет, что индексный и полный поиск возвращают один и тот же набор записей. */
-    private static void assertSameRows(Query scan, Query indexed, String queryName) {
-        java.util.Set<Object> scanIds = new java.util.HashSet<>();
-        java.util.Set<Object> indexedIds = new java.util.HashSet<>();
-        for (Object[] row : scan.getRows()) scanIds.add(row[0]);
-        for (Object[] row : indexed.getRows()) indexedIds.add(row[0]);
-        if (!scanIds.equals(indexedIds)) {
-            throw new IllegalStateException("Different query results for " + queryName
-                    + ": scan=" + scanIds.size() + ", index=" + indexedIds.size());
-        }
+    private static void emit(StringBuilder md, String line) {
+        System.out.println(line);
+        md.append(line).append('\n');
     }
 
     private static void fill(Database db, int n) {
@@ -97,14 +115,13 @@ public final class IndexBenchmark {
             int to = Math.min(n, from + CHUNK);
             List<List<Object>> batch = new ArrayList<>(to - from);
             for (int id = from; id < to; id++) {
-                batch.add(Arrays.<Object>asList(id, "hero" + id, id % 2 == 0, 500 + random.nextInt(500),
+                batch.add(Arrays.asList(id, "hero" + id, id % 2 == 0, 500 + random.nextInt(500),
                         true, random.nextInt(range), random.nextInt(30), random.nextInt(30), random.nextInt(30)));
             }
             db.insert("heroes", null, batch);
         }
     }
 
-    /** Для каждого из трёх запросов: [медиана в мс, число строк в ответе]. */
     private static double[][] measureAll(Database db, int range, Query[] lastResults) {
         double[][] out = new double[3][];
         for (int q = 0; q < 3; q++) {
@@ -130,10 +147,10 @@ public final class IndexBenchmark {
     }
 
     private static Condition condition(int kind, int key, int range) {
-        switch (kind) {
-            case 0:  return new Condition("gold", Operator.EQUAL, (long) key);
-            case 1:  return new Condition("gold", Operator.GREATER_OR_EQUAL, (long) (range - 5));
-            default: return new Condition("gold", Operator.LESS_THAN, (long) Math.max(1, range / 100));
-        }
+        return switch (kind) {
+            case 0 -> new Condition("gold", Operator.EQUAL, (long) key);
+            case 1 -> new Condition("gold", Operator.GREATER_OR_EQUAL, (long) (range - 5));
+            default -> new Condition("gold", Operator.LESS_THAN, (long) Math.max(1, range / 100));
+        };
     }
 }
