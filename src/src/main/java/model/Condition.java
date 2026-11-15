@@ -2,21 +2,40 @@ package model;
 
 import java.util.function.Predicate;
 
+/** Хранит одно условие сравнения для фильтрации строк таблицы. */
 public class Condition {
     private final String column;
     private final Operator operator;
     private final Object value;
 
+    /** Создаёт условие сравнения.
+     * @param column имя колонки.
+     * @param operator оператор сравнения.
+     * @param value сравниваемый литерал.
+     */
     public Condition(String column, Operator operator, Object value) {
         this.column = column.toLowerCase();
         this.operator = operator;
         this.value = value;
     }
 
+    /** Возвращает имя колонки, к которой применяется условие.
+     * @return имя колонки.
+     */
     public String getColumn()     { return column; }
+    /** Возвращает оператор сравнения условия.
+     * @return оператор сравнения.
+     */
     public Operator getOperator() { return operator; }
+    /** Возвращает литерал, с которым сравнивается значение колонки.
+     * @return значение литерала.
+     */
     public Object getValue()      { return value; }
 
+    /** Создаёт предикат для строк указанной схемы.
+     * @param schema схема таблицы.
+     * @return предикат проверки строки.
+     */
     public Predicate<Row> bind(Schema schema) {
         int pos = schema.indexOf(column);
         DataType type = schema.getColumns().get(pos).getType();

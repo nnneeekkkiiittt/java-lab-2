@@ -21,28 +21,47 @@ import java.util.TreeMap;
 public class Index implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** Имя индекса. */
     private final String name;
+    /** Имя индексируемой колонки. */
     private final String column;
+    /** Отсортированная карта «значение колонки — множество первичных ключей строк». */
     private final TreeMap<Comparable, Set<Object>> entries = new TreeMap<>();
 
+    /** Создаёт пустой индекс для указанной колонки.
+     * @param name имя индекса.
+     * @param column имя индексируемой колонки.
+     */
     public Index(String name, String column) {
         this.name = name;
         this.column = column;
     }
 
+    /** Возвращает имя индексируемой колонки.
+     * @return имя колонки.
+     */
     public String getColumn() {
         return column;
     }
 
+    /** Возвращает имя индекса.
+     * @return имя индекса.
+     */
     public String getName() {
         return name;
     }
 
+    /** Возвращает неизменяемое представление индексированных значений и первичных ключей.
+     * @return карта «значение колонки — множество первичных ключей».
+     */
     public Map<Comparable, Set<Object>> getEntries() {
         return Collections.unmodifiableMap(entries);
     }
 
-    /** Общее число пар «значение - первичный ключ». Нужно для проверки целостности после загрузки. */
+    /** Подсчитывает пары «значение — первичный ключ» в индексе.
+     * Метод используется для проверки согласованности индекса после загрузки.
+     * @return количество проиндексированных записей.
+     */
     public int entryCount() {
         int count = 0;
         for (Set<Object> keys : entries.values()) {
@@ -51,6 +70,11 @@ public class Index implements Serializable {
         return count;
     }
 
+    /** Добавляет первичный ключ строки в группу заданного значения.
+     * Значения {@code null} в индекс не включаются.
+     * @param value значение индексируемой колонки.
+     * @param primaryKey первичный ключ строки.
+     */
     public void add(Object value, Object primaryKey) {
         if (value == null) return;
         Comparable key = (Comparable) value;
@@ -62,6 +86,10 @@ public class Index implements Serializable {
         primaryKeys.add(primaryKey);
     }
 
+    /** Удаляет первичный ключ из группы указанного значения.
+     * @param value прежнее значение индексируемой колонки.
+     * @param removedKey первичный ключ удаляемой или изменяемой строки.
+     */
     public void remove(Object value, Object removedKey) {
         if (value == null) return;
         Comparable key = (Comparable) value;
@@ -72,8 +100,14 @@ public class Index implements Serializable {
     }
 
     /**
-     * Первичные ключи строк, у которых значение колонки удовлетворяет «значение оператор literal».
-     * Литерал должен быть того же типа, что и значения колонки. Оператор {@code !=} не поддерживается.
+     * Находит первичные ключи строк, значение индексируемой колонки которых удовлетворяет
+     * условию сравнения с литералом. Поддерживаются равенство и диапазонные сравнения;
+     * оператор {@code !=} индексом не поддерживается.
+     *
+     * @param op оператор сравнения.
+     * @param literal литерал того же типа, что и значения индексируемой колонки.
+     * @return список первичных ключей найденных строк.
+     * @throws UnsupportedOperationException если оператор не поддерживается индексом.
      */
     public List<Object> find(Operator op, Object literal) {
         Comparable key = (Comparable) literal;

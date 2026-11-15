@@ -17,12 +17,16 @@ import java.util.List;
 import java.util.stream.Stream;
 
 
+/** Сохраняет каждую таблицу в отдельный сериализованный файл; использует временный файл и атомарное переименование при записи. */
 public class FileTableRepository implements TableRepository {
     private static final String TABLE_EXT = ".tbl";
     private static final String TEMP_EXT = ".tmp";
 
     private final Path dir;
 
+    /** Создаёт файловый репозиторий и каталог хранения.
+     * @param dir путь к каталогу с файлами таблиц.
+     */
     public FileTableRepository(Path dir) {
         this.dir = dir;
         try {

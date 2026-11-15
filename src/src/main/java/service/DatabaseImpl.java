@@ -19,14 +19,19 @@ import repository.TableRepository;
 import java.util.*;
 import java.util.function.Predicate;
 
+/** Реализует операции СУБД, поддерживает ограничения целостности, индексы и сохранение состояния через репозиторий. */
 public class DatabaseImpl implements Database {
     private final Map<String, Table> tables = new LinkedHashMap<>();
     private final TableRepository repository;
 
+    /** Создаёт СУБД без персистентного хранилища. */
     public DatabaseImpl() {
         this(new NoOpTableRepository());
     }
 
+    /** Создаёт СУБД и восстанавливает данные из репозитория.
+     * @param repository хранилище снимков таблиц.
+     */
     public DatabaseImpl(TableRepository repository) {
         this.repository = repository;
         for (TableData data : repository.loadAll()) {

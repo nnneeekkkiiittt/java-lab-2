@@ -29,6 +29,9 @@ public final class IndexBenchmark {
     private IndexBenchmark() {
     }
 
+    /** Запускает тест на нескольких размерах таблицы и выводит медиану времени запросов.
+     * @param args аргументы командной строки не используются.
+     */
     public static void main(String[] args) {
         System.out.println("| Rows | Query | No index, ms | With index, ms | Speedup | Result rows |");
         System.out.println("|---:|---|---:|---:|---:|---:|");
@@ -50,10 +53,9 @@ public final class IndexBenchmark {
 
             String[] names = {"gold = K", "gold >= max-4", "gold < 1% of range"};
             for (int q = 0; q < 3; q++) {
-                // сверка: индекс обязан вернуть то же количество строк, что и перебор
-                if (scanResults[q].getRows().size() != indexResults[q].getRows().size()) {
-                    throw new IllegalStateException("Mismatch for " + names[q]);
-                }
+                // Порядок выдачи может различаться (сканирование сохраняет порядок вставки,
+                // индекс сортирует по значению ключа), поэтому сравниваем наборы первичных ключей.
+                assertSameRows(scanResults[q], indexResults[q], names[q]);
                 double a = scan[q][0];
                 double b = indexed[q][0];
                 System.out.printf("| %,d | `%s` | %.3f | %.3f | x%.0f | %,d |%n",
@@ -62,6 +64,18 @@ public final class IndexBenchmark {
             System.out.printf("| %,d | index build time | | %.1f | | |%n", n, buildMs);
         }
         System.out.println("\n(sink=" + sink + ")");
+    }
+
+    /** Проверяет, что индексный и полный поиск возвращают один и тот же набор записей. */
+    private static void assertSameRows(Query scan, Query indexed, String queryName) {
+        java.util.Set<Object> scanIds = new java.util.HashSet<>();
+        java.util.Set<Object> indexedIds = new java.util.HashSet<>();
+        for (Object[] row : scan.getRows()) scanIds.add(row[0]);
+        for (Object[] row : indexed.getRows()) indexedIds.add(row[0]);
+        if (!scanIds.equals(indexedIds)) {
+            throw new IllegalStateException("Different query results for " + queryName
+                    + ": scan=" + scanIds.size() + ", index=" + indexedIds.size());
+        }
     }
 
     private static void fill(Database db, int n) {

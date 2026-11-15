@@ -11,6 +11,7 @@ import model.Schema;
 import java.util.*;
 import java.util.function.Predicate;
 
+/** Хранит строки одной таблицы, индекс первичного ключа и вторичные индексы; поддерживает синхронизацию индексов при изменении данных. */
 public class Table {
     private final Schema schema;
     private final Map<Long, Row> rows = new LinkedHashMap<>();   // rowId -> строка
@@ -18,10 +19,17 @@ public class Table {
     private final Map<String, Index> indexes = new LinkedHashMap<>();   // имя колонки -> индекс
     private long nextRowId = 1;
 
+    /** Создаёт пустую таблицу по заданной схеме.
+     * @param schema схема создаваемой таблицы.
+     */
     public Table(Schema schema) {
         this.schema = schema;
     }
 
+    /** Создаёт таблицу и загружает в неё начальные строки.
+     * @param schema схема таблицы.
+     * @param initial начальные строки в порядке колонок схемы.
+     */
     public Table(Schema schema, Collection<Row> initial) {
         this(schema);
         for (Row row : initial) {
@@ -32,6 +40,12 @@ public class Table {
     /**
      * Загрузка с диска: строки и сохранённые индексы. Индекс, который не совпадает с данными
      * (или относится к несуществующей колонке), перестраивается из строк.
+     */
+    /** Восстанавливает таблицу из схемы, строк и сохранённых индексов.
+     * Несогласованные индексы пересоздаются на основе строк.
+     * @param schema схема таблицы.
+     * @param initial восстановленные строки таблицы.
+     * @param savedIndexes индексы, загруженные из постоянного хранилища.
      */
     public Table(Schema schema, Collection<Row> initial, Collection<Index> savedIndexes) {
         this(schema, initial);   // индексы ещё не подключены, строки добавляются без них
@@ -45,28 +59,53 @@ public class Table {
         }
     }
 
+    /** Возвращает схему таблицы.
+     * @return схема таблицы.
+     */
     public Schema getSchema() { return schema; }
+
+    /** Возвращает число строк в таблице.
+     * @return количество строк.
+     */
     public int size()         { return rows.size(); }
 
+    /** Возвращает строки таблицы в порядке вставки.
+     * @return неизменяемое представление коллекции строк.
+     */
     public Collection<Row> getRows() {
         return Collections.unmodifiableCollection(rows.values());
     }
 
     // ---------------- индексы ----------------
 
+    /** Проверяет, создан ли индекс для указанной колонки.
+     * @param column имя колонки.
+     * @return {@code true}, если для колонки существует индекс.
+     */
     public boolean hasIndex(String column) {
         return indexes.containsKey(column.toLowerCase());
     }
 
+    /** Возвращает индекс указанной колонки.
+     * @param column имя колонки.
+     * @return индекс или {@code null}, если индекс не создан.
+     */
     public Index getIndex(String column) {
         return indexes.get(column.toLowerCase());
     }
 
+    /** Возвращает все вторичные индексы таблицы.
+     * @return неизменяемое представление коллекции индексов.
+     */
     public Collection<Index> getIndexes() {
         return Collections.unmodifiableCollection(indexes.values());
     }
 
-    /** Создаёт индекс и заполняет его существующими строками. */
+    /** Создаёт индекс для колонки и заполняет его существующими строками.
+     * @param name имя нового индекса.
+     * @param column имя индексируемой колонки.
+     * @throws SchemaException если колонка с указанным именем отсутствует.
+     */
     public void createIndex(String name, String column) {
         int pos = schema.indexOf(column);
         if (pos == -1) throw new SchemaException("Unknown column: " + column);
@@ -79,7 +118,13 @@ public class Table {
         indexes.put(index.getColumn(), index);
     }
 
-    /** Строки по индексу. Литерал уже приведён к типу колонки. Порядок: по возрастанию значения. */
+    /** Выбирает строки через индекс в порядке возрастания значения индексируемой колонки.
+     * Перед вызовом литерал должен быть приведён к типу колонки.
+     * @param index индекс, используемый для поиска.
+     * @param op оператор сравнения.
+     * @param literal значение, с которым сравнивается колонка.
+     * @return строки, удовлетворяющие условию.
+     */
     public List<Row> selectByIndex(Index index, Operator op, Object literal) {
         List<Row> result = new ArrayList<>();
         for (Object pk : index.find(op, literal)) {
@@ -101,6 +146,11 @@ public class Table {
 
     // ---------------- INSERT ----------------
 
+    /** Добавляет новую строку и обновляет первичный и вторичные индексы.
+     * @param values значения колонок в порядке, заданном схемой.
+     * @throws DuplicateKeyException если первичный ключ уже существует.
+     * @throws exception.TypeMismatchException если значение не соответствует типу колонки.
+     */
     public void insert(Object[] values) {
         Object[] converted = new Object[values.length];
         for (int i = 0; i < values.length; i++) {
@@ -116,7 +166,10 @@ public class Table {
 
     // ---------------- SELECT ----------------
 
-    /** Возвращает строки, подходящие под фильтр, в порядке вставки. */
+    /** Возвращает строки, подходящие под предикат, в порядке вставки.
+     * @param filter условие отбора строк.
+     * @return список строк, удовлетворяющих предикату.
+     */
     public List<Row> select(Predicate<Row> filter) {
         List<Row> result = new ArrayList<>();
         for (Row row : rows.values()) {
@@ -127,7 +180,11 @@ public class Table {
         return result;
     }
 
-    /** Поиск по первичному ключу за O(1). Литерал из запроса сначала приведи к типу PK. */
+    /** Находит строку по первичному ключу за ожидаемое время {@code O(1)}.
+     * Значение ключа перед вызовом должно быть приведено к типу первичной колонки.
+     * @param pk значение первичного ключа.
+     * @return найденная строка или {@code null}, если ключ отсутствует.
+     */
     public Row findByPk(Object pk) {
         Long id = pkIndex.get(pk);
         return id == null ? null : rows.get(id);
@@ -136,9 +193,11 @@ public class Table {
     // ---------------- UPDATE ----------------
 
     /**
-     * Обновляет строки, подходящие под фильтр.
-     * @param assignments позиция колонки -> новое значение
-     * @return число обновлённых строк
+     * Обновляет строки, подходящие под фильтр, и синхронизирует индексы.
+     * @param filter условие отбора обновляемых строк.
+     * @param assignments отображение позиций колонок на новые значения.
+     * @return число обновлённых строк.
+     * @throws DuplicateKeyException если обновление приводит к повторению первичного ключа.
      */
     public int update(Predicate<Row> filter, Map<Integer, Object> assignments) {
         // 1. приводим новые значения к типам колонок
@@ -188,7 +247,10 @@ public class Table {
 
     // ---------------- DELETE ----------------
 
-    /** Удаляет строки, подходящие под фильтр. Возвращает их число. */
+    /** Удаляет строки, подходящие под предикат, и удаляет их записи из индексов.
+     * @param filter условие отбора удаляемых строк.
+     * @return количество удалённых строк.
+     */
     public int delete(Predicate<Row> filter) {
         List<Long> ids = matchingIds(filter);
         for (Long id : ids) {

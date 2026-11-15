@@ -54,6 +54,11 @@ public final class SqlParser {
         this.tokens = tokens;
     }
 
+    /** Разбирает строку и создаёт объект SQL-команды.
+     * @param sql исходный текст запроса.
+     * @return разобранная команда.
+     * @throws exception.ParseException если синтаксис не поддерживается или некорректен.
+     */
     public static Statement parse(String sql) {
         return new SqlParser(Tokenizer.tokenize(sql)).statement();
     }

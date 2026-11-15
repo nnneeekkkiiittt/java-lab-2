@@ -13,6 +13,9 @@ public final class DotaSeed {
     private DotaSeed() {
     }
 
+    /** Создаёт демонстрационные таблицы и добавляет игровые данные.
+     * @param db база данных для заполнения.
+     */
     public static void fill(Database db) {
         Schema heroes = Schema.table("heroes")
                 .pk("id", DataType.INT)

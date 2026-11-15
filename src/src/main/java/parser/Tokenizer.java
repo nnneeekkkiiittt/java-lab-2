@@ -14,6 +14,10 @@ public final class Tokenizer {
     private Tokenizer() {
     }
 
+    /** Разбивает SQL-текст на последовательность токенов.
+     * @param sql исходный текст запроса.
+     * @return токены с завершающим токеном {@code END}.
+     */
     public static List<Token> tokenize(String sql) {
         List<Token> tokens = new ArrayList<>();
         int i = 0;

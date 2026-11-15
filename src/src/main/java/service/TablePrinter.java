@@ -2,11 +2,15 @@ package service;
 
 import java.util.List;
 
+/** Выводит результат выборки в консольной табличной форме. */
 public final class TablePrinter {
 
     private TablePrinter() {
     }
 
+    /** Печатает заголовки и строки результата выборки в виде выровненной таблицы.
+     * @param result результат запроса с названиями колонок и строками.
+     */
     public static void print(Query result) {
         List<String> columns = result.getColumns();
         List<Object[]> rows = result.getRows();

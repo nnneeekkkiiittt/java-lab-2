@@ -5,16 +5,23 @@ import exception.DotaDBException;
 import java.util.Scanner;
 import java.util.function.Function;
 
+/** Предоставляет интерактивный консольный интерфейс для ввода и выполнения SQL-подобных команд. */
 public class ConsoleInterface {
 
     private final Function<String, Query> executor;
     private final Scanner scanner;
 
+    /** Создаёт интерфейс, передавая функцию выполнения пользовательских запросов.
+     * @param executor обработчик SQL-подобных запросов.
+     */
     public ConsoleInterface(Function<String, Query> executor) {
         this.executor = executor;
         this.scanner = new Scanner(System.in);
     }
 
+    /** Запускает интерактивный цикл чтения и выполнения команд до ввода {@code exit}.
+     * После завершения цикла закрывает поток ввода.
+     */
     public void run() {
         System.out.println("Введите SQL-запрос или exit для выхода.");
         try {
